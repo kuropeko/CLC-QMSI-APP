@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>CLC QEA — {% block title %}{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}"/>
+</head>
+<body class="app-page">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <span class="sidebar-icon">🚢</span>
+      <div>
+        <div class="sidebar-title">CLC QEA Marine</div>
+        <div class="sidebar-sub">Form Management</div>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <a href="{{ url_for('browse') }}" class="nav-item {% if request.endpoint == 'browse' %}active{% endif %}">
+        <span class="nav-icon">📂</span> Browse & Download
+      </a>
+      <a href="{{ url_for('tracker') }}" class="nav-item {% if request.endpoint == 'tracker' %}active{% endif %}">
+        <span class="nav-icon">📊</span> Record of Use
+      </a>
+      <a href="{{ url_for('chat') }}" class="nav-item {% if request.endpoint == 'chat' %}active{% endif %}">
+        <span class="nav-icon">💬</span> Team Chat
+        <span class="chat-online-dot" id="sidebarOnlineDot" title="Online users"></span>
+      </a>
+    </nav>
+
+    <div class="sidebar-bottom">
+      <div class="user-info">
+        <span class="user-icon">{% if is_admin %}🔑{% else %}👤{% endif %}</span>
+        <span class="user-email">{{ user_email }}</span>
+      </div>
+      {% if is_admin %}
+      <div class="admin-badge">Admin</div>
+      {% endif %}
+      <a href="{{ url_for('logout') }}" class="btn btn-logout">🚪 Logout</a>
+    </div>
+  </aside>
+
+  <!-- MAIN CONTENT -->
+  <main class="main-content">
+    {% block content %}{% endblock %}
+  </main>
+
+  <!-- Poll online count for sidebar dot -->
+  <script>
+    function updateOnlineDot() {
+      fetch('/chat/online')
+        .then(r => r.json())
+        .then(users => {
+          const dot = document.getElementById('sidebarOnlineDot');
+          if (dot) {
+            dot.title = users.length + ' online';
+            dot.style.display = users.length > 0 ? 'inline-block' : 'none';
+          }
+        }).catch(() => {});
+    }
+    updateOnlineDot();
+    setInterval(updateOnlineDot, 15000);
+  </script>
+
+</body>
+</html>

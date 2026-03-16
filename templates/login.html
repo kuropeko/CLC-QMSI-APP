@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>CLC QEA — Sign In</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}"/>
+</head>
+<body class="login-page">
+
+  <div class="login-wrapper">
+    <div class="login-card">
+      <div class="login-brand">
+        <div class="brand-icon">🚢</div>
+        <h1>CLC QEA Marine</h1>
+        <p>Form Management System</p>
+      </div>
+
+      <!-- ROLE TOGGLE -->
+      <div class="role-toggle">
+        <button type="button"
+                id="btn-regular"
+                class="role-btn {% if selected_role != 'admin' %}role-btn-active{% endif %}"
+                onclick="setRole('regular')">
+          👤 Regular User
+        </button>
+        <button type="button"
+                id="btn-admin"
+                class="role-btn {% if selected_role == 'admin' %}role-btn-active{% endif %}"
+                onclick="setRole('admin')">
+          🔑 Admin
+        </button>
+      </div>
+
+      {% if error %}
+      <div class="alert alert-error">{{ error }}</div>
+      {% endif %}
+
+      <form method="POST" class="login-form">
+        <input type="hidden" name="role" id="roleInput" value="{{ selected_role }}"/>
+        <div class="form-group">
+          <label for="email">Email</label>
+          <input type="email" id="email" name="email" placeholder="Enter your email" required autofocus />
+        </div>
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input type="password" id="password" name="password" placeholder="Enter your password" required />
+        </div>
+        <button type="submit" class="btn btn-primary btn-full">
+          Sign In as <span id="roleLabel">{% if selected_role == 'admin' %}Admin{% else %}Regular User{% endif %}</span>
+        </button>
+      </form>
+
+      <p class="login-footer">© 2026 CLC QEA Marine Services Inc.</p>
+    </div>
+  </div>
+
+  <script>
+    function setRole(role) {
+      document.getElementById('roleInput').value = role;
+      document.getElementById('roleLabel').textContent = role === 'admin' ? 'Admin' : 'Regular User';
+      document.getElementById('btn-regular').classList.toggle('role-btn-active', role === 'regular');
+      document.getElementById('btn-admin').classList.toggle('role-btn-active', role === 'admin');
+    }
+  </script>
+
+</body>
+</html>
