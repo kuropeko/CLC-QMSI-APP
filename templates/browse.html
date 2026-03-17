@@ -1,0 +1,253 @@
+{% extends "base.html" %}
+{% block title %}Browse & Download{% endblock %}
+
+{% block content %}
+
+{% if success_msg %}
+<div class="alert alert-success">✅ {{ success_msg }}</div>
+{% endif %}
+{% if error_msg %}
+<div class="alert alert-error">❌ {{ error_msg }}</div>
+{% endif %}
+
+<!-- PAGE HEADER -->
+<div class="page-header">
+  <div>
+    <h1 class="page-title">
+      {% if active_folder %}📁 {{ active_folder }}{% else %}🗂️ All Forms{% endif %}
+    </h1>
+    <p class="page-sub">{{ all_files|length }} form(s) found</p>
+  </div>
+  {% if is_admin %}
+  <button class="btn btn-add-file" onclick="toggleUploadModal()">➕ Add File</button>
+  {% endif %}
+</div>
+
+<!-- ── UPLOAD MODAL (admin only) ───────────────────────────── -->
+{% if is_admin %}
+<div id="uploadModal" class="modal-overlay" onclick="closeOnOverlay(event, 'uploadModal')">
+  <div class="modal-card">
+    <div class="modal-header">
+      <span>📤 Upload File</span>
+      <button class="modal-close" onclick="closeModal('uploadModal')">✕</button>
+    </div>
+    <form method="POST" action="{{ url_for('admin_upload') }}" enctype="multipart/form-data">
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Folder</label>
+          <select name="folder" class="form-select" required>
+            <option value="" disabled selected>Select a folder…</option>
+            {% for folder in folders %}
+            <option value="{{ folder }}" {% if active_folder == folder %}selected{% endif %}>{{ folder }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>File (PDF or DOCX)</label>
+          <div class="file-drop-zone" id="dropZone"
+               ondragover="event.preventDefault(); this.classList.add('drag-over')"
+               ondragleave="this.classList.remove('drag-over')"
+               ondrop="handleDrop(event)">
+            <div class="file-drop-icon">☁️</div>
+            <p class="file-drop-text">Drag files here or <label for="fileInput" class="file-browse-link">Browse</label></p>
+            <p class="file-drop-hint" id="fileNameDisplay">PDF or DOCX only</p>
+            <input type="file" id="fileInput" name="file" accept=".pdf,.docx" style="display:none"
+                   onchange="updateFileName(this)"/>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('uploadModal')">Cancel</button>
+        <button type="submit" class="btn btn-primary">📤 Upload</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ── DELETE MODAL (admin only) ───────────────────────────── -->
+<div id="deleteModal" class="modal-overlay" onclick="closeOnOverlay(event, 'deleteModal')">
+  <div class="modal-card modal-card-sm">
+    <div class="modal-header modal-header-danger">
+      <span>🗑️ Confirm Delete</span>
+      <button class="modal-close" onclick="closeModal('deleteModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p class="delete-warning">Are you sure you want to delete:</p>
+      <p class="delete-filename" id="deleteFilenameDisplay">—</p>
+      <p class="delete-note">⚠️ This will also permanently remove all its usage logs.</p>
+    </div>
+    <form method="POST" action="{{ url_for('admin_delete') }}">
+      <input type="hidden" name="folder"   id="deleteFolder"/>
+      <input type="hidden" name="filename" id="deleteFilename"/>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('deleteModal')">Cancel</button>
+        <button type="submit" class="btn btn-danger">🗑️ Yes, Delete</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ── RENAME MODAL (admin only) ───────────────────────────── -->
+<div id="renameModal" class="modal-overlay" onclick="closeOnOverlay(event, 'renameModal')">
+  <div class="modal-card modal-card-sm">
+    <div class="modal-header">
+      <span>✏️ Rename File</span>
+      <button class="modal-close" onclick="closeModal('renameModal')">✕</button>
+    </div>
+    <form method="POST" action="{{ url_for('admin_rename') }}">
+      <div class="modal-body">
+        <input type="hidden" name="folder"   id="renameFolder"/>
+        <input type="hidden" name="old_name" id="renameOldName"/>
+        <div class="form-group">
+          <label>New Filename</label>
+          <input type="text" name="new_name" id="renameNewName" class="form-input" required/>
+          <p class="form-hint">File extension will be kept automatically.</p>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('renameModal')">Cancel</button>
+        <button type="submit" class="btn btn-primary">✅ Rename</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+<!-- FOLDER PILLS -->
+<div class="folder-pills">
+  <a href="{{ url_for('browse') }}" class="pill {% if not active_folder %}pill-active{% endif %}">🗂️ All</a>
+  {% for folder in folders %}
+  <a href="{{ url_for('browse', folder=folder) }}"
+     class="pill {% if active_folder == folder %}pill-active{% endif %}">
+    📁 {{ folder }}
+  </a>
+  {% endfor %}
+</div>
+
+<!-- SEARCH -->
+<form method="GET" class="search-bar">
+  {% if active_folder %}
+  <input type="hidden" name="folder" value="{{ active_folder }}"/>
+  {% endif %}
+  <input type="text" name="search" value="{{ search }}"
+         placeholder="🔍  Search forms..." class="search-input"/>
+  <button type="submit" class="btn btn-secondary">Search</button>
+  {% if search %}
+  <a href="{{ url_for('browse', folder=active_folder) }}" class="btn btn-ghost">Clear</a>
+  {% endif %}
+</form>
+
+<!-- TABLE -->
+{% if all_files %}
+<div class="table-wrap">
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Form Name</th>
+        <th>Folder</th>
+        <th>Action</th>
+        {% if is_admin %}<th>Manage</th>{% endif %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for folder_name, pdf_name in all_files %}
+      <tr>
+        <td>
+          {% if pdf_name.lower().endswith('.pdf') %}
+            <span class="file-icon">📄</span>
+          {% elif pdf_name.lower().endswith('.docx') %}
+            <span class="file-icon">📝</span>
+          {% endif %}
+          {{ pdf_name }}
+        </td>
+        <td><span class="folder-badge">{{ folder_name }}</span></td>
+        <td>
+          <form method="POST" action="{{ url_for('download') }}">
+            <input type="hidden" name="folder"   value="{{ folder_name }}"/>
+            <input type="hidden" name="filename" value="{{ pdf_name }}"/>
+            <button type="submit" class="btn btn-download">✨ Download</button>
+          </form>
+        </td>
+        {% if is_admin %}
+        <td>
+          <div class="admin-actions">
+            <button class="btn btn-rename"
+                    onclick="openRenameModal('{{ folder_name }}', '{{ pdf_name }}')">
+              ✏️ Rename
+            </button>
+            <button class="btn btn-delete"
+                    onclick="openDeleteModal('{{ folder_name }}', '{{ pdf_name }}')">
+              🗑️ Delete
+            </button>
+          </div>
+        </td>
+        {% endif %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="empty-state">
+  <div class="empty-icon">📭</div>
+  <p>No forms found.</p>
+</div>
+{% endif %}
+
+<script>
+  // ── Generic modal helpers ─────────────────────────────────
+  function closeModal(id) {
+    document.getElementById(id).style.display = 'none';
+  }
+  function closeOnOverlay(e, id) {
+    if (e.target === document.getElementById(id)) closeModal(id);
+  }
+
+  // ── Upload modal ──────────────────────────────────────────
+  function toggleUploadModal() {
+    const m = document.getElementById('uploadModal');
+    m.style.display = m.style.display === 'flex' ? 'none' : 'flex';
+  }
+  function updateFileName(input) {
+    document.getElementById('fileNameDisplay').textContent =
+      input.files[0] ? input.files[0].name : 'PDF or DOCX only';
+  }
+  function handleDrop(e) {
+    e.preventDefault();
+    document.getElementById('dropZone').classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file) {
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      document.getElementById('fileInput').files = dt.files;
+      document.getElementById('fileNameDisplay').textContent = file.name;
+    }
+  }
+
+  // ── Delete modal ──────────────────────────────────────────
+  function openDeleteModal(folder, filename) {
+    document.getElementById('deleteFolder').value           = folder;
+    document.getElementById('deleteFilename').value         = filename;
+    document.getElementById('deleteFilenameDisplay').textContent = filename;
+    document.getElementById('deleteModal').style.display   = 'flex';
+  }
+
+  // ── Rename modal ──────────────────────────────────────────
+  function openRenameModal(folder, filename) {
+    document.getElementById('renameFolder').value          = folder;
+    document.getElementById('renameOldName').value         = filename;
+    document.getElementById('renameNewName').value         = filename;
+    document.getElementById('renameModal').style.display  = 'flex';
+  }
+
+  // Auto-dismiss alerts
+  setTimeout(() => {
+    document.querySelectorAll('.alert').forEach(el => {
+      el.style.transition = 'opacity .5s';
+      el.style.opacity = '0';
+      setTimeout(() => el.remove(), 500);
+    });
+  }, 4000);
+</script>
+
+{% endblock %}

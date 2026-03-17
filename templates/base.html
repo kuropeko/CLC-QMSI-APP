@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>CLC QEA — {% block title %}{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}"/>
+</head>
+<body class="app-page">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <span class="sidebar-icon">🚢</span>
+      <div>
+        <div class="sidebar-title">CLC QEA Marine</div>
+        <div class="sidebar-sub">Form Management</div>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <a href="{{ url_for('browse') }}" class="nav-item {% if request.endpoint == 'browse' %}active{% endif %}">
+        <span class="nav-icon">📂</span> Browse & Download
+      </a>
+      <a href="{{ url_for('tracker') }}" class="nav-item {% if request.endpoint == 'tracker' %}active{% endif %}">
+        <span class="nav-icon">📊</span> Record of Use
+      </a>
+      <a href="{{ url_for('chat') }}" class="nav-item {% if request.endpoint == 'chat' %}active{% endif %}">
+        <span class="nav-icon">💬</span> Team Chat
+        <span class="chat-online-dot" id="sidebarOnlineDot" title="Online users"></span>
+      </a>
+    </nav>
+
+    <div class="sidebar-bottom">
+      <div class="user-info">
+        <span class="user-icon">{% if is_admin %}🔑{% else %}👤{% endif %}</span>
+        <span class="user-email">{{ user_email }}</span>
+      </div>
+      {% if is_admin %}
+      <div class="admin-badge">Admin</div>
+      {% endif %}
+
+      {% if user_email == 'jmr.tibon@clcqea.com' %}
+      <button class="btn btn-manage-users" onclick="openManageUsers()">👥 Manage Users</button>
+      {% endif %}
+
+      <a href="{{ url_for('logout') }}" class="btn btn-logout">🚪 Logout</a>
+    </div>
+  </aside>
+
+  <!-- MAIN CONTENT -->
+  <main class="main-content">
+    {% block content %}{% endblock %}
+  </main>
+
+  <!-- ── MANAGE USERS MODAL (super admin only) ─────────────── -->
+  {% if user_email == 'jmr.tibon@clcqea.com' %}
+  <div id="manageUsersModal" class="modal-overlay" onclick="closeManageUsersOnOverlay(event)" style="display:none;">
+    <div class="modal-card modal-card-lg">
+      <div class="modal-header">
+        <span>👥 Manage Users</span>
+        <button class="modal-close" onclick="closeManageUsers()">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="manage-users-hint">Toggle the switch to grant or revoke admin access. Changes take effect on their next login.</p>
+        <div id="manageUsersList" class="manage-users-list">
+          <div class="manage-users-loading">Loading users…</div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeManageUsers()">Close</button>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Poll online count for sidebar dot -->
+  <script>
+    function updateOnlineDot() {
+      fetch('/chat/online')
+        .then(r => r.json())
+        .then(users => {
+          const dot = document.getElementById('sidebarOnlineDot');
+          if (dot) {
+            dot.title = users.length + ' online';
+            dot.style.display = users.length > 0 ? 'inline-block' : 'none';
+          }
+        }).catch(() => {});
+    }
+    updateOnlineDot();
+    setInterval(updateOnlineDot, 15000);
+
+    // ── Manage Users Modal ────────────────────────────────────
+    function openManageUsers() {
+      document.getElementById('manageUsersModal').style.display = 'flex';
+      loadUsers();
+    }
+
+    function closeManageUsers() {
+      document.getElementById('manageUsersModal').style.display = 'none';
+    }
+
+    function closeManageUsersOnOverlay(e) {
+      if (e.target === document.getElementById('manageUsersModal')) closeManageUsers();
+    }
+
+    function loadUsers() {
+      const list = document.getElementById('manageUsersList');
+      list.innerHTML = '<div class="manage-users-loading">Loading users…</div>';
+      fetch('/admin/users')
+        .then(r => r.json())
+        .then(users => {
+          if (!users.length) {
+            list.innerHTML = '<div class="manage-users-empty">No users found.</div>';
+            return;
+          }
+          list.innerHTML = users.map(u => {
+            const isSuper  = u.is_super;
+            const isAdmin  = u.is_admin;
+            const shortEmail = u.email.split('@')[0];
+            return `
+              <div class="manage-user-row">
+                <div class="manage-user-info">
+                  <span class="manage-user-icon">${isSuper ? '👑' : isAdmin ? '🔑' : '👤'}</span>
+                  <div>
+                    <div class="manage-user-email">${u.email}</div>
+                    <div class="manage-user-role">${isSuper ? 'Super Admin' : isAdmin ? 'Admin' : 'Regular User'}</div>
+                  </div>
+                </div>
+                ${isSuper ? `<span class="manage-super-badge">You</span>` : `
+                <label class="toggle-switch" title="${isAdmin ? 'Revoke admin' : 'Grant admin'}">
+                  <input type="checkbox" ${isAdmin ? 'checked' : ''}
+                         onchange="toggleAdmin('${u.email}', this.checked, this)"/>
+                  <span class="toggle-slider"></span>
+                </label>`}
+              </div>`;
+          }).join('');
+        })
+        .catch(() => {
+          list.innerHTML = '<div class="manage-users-empty">Failed to load users.</div>';
+        });
+    }
+
+    function toggleAdmin(email, makeAdmin, checkbox) {
+      const endpoint = makeAdmin ? '/admin/users/promote' : '/admin/users/demote';
+      checkbox.disabled = true;
+      fetch(endpoint, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({email: email})
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.ok) {
+          loadUsers(); // refresh the list
+        } else {
+          alert('Error: ' + (data.error || 'Unknown error'));
+          checkbox.checked  = !makeAdmin; // revert
+          checkbox.disabled = false;
+        }
+      })
+      .catch(() => {
+        checkbox.checked  = !makeAdmin;
+        checkbox.disabled = false;
+      });
+    }
+  </script>
+
+</body>
+</html>
